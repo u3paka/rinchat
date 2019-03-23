@@ -1,0 +1,99 @@
+debug: true
+version: 1
+dialog:
+  dcmds: &dcmds
+    ping{weight=100}: pong!
+    help ping{weight=100}: check the connection... if you can see this message, it's OK.
+    go (\w+){weight=100}: <go .cap1>
+    help topic{weight=100}: internal topic transition
+    vars{weight=100}: <.>
+    get (\w+){weight=100}: <$x := (get .cap1)><if $x><.cap1> is <$x><else>undefined<end>
+    help get{weight=100}: to check internal variables
+    set (\w+)\sas\s(.+){weight=100}: <set .cap2 .cap1>
+    set (\w+)\s(.+){weight=100}: <set .cap1 .cap2> <.cap1> is set as <.cap2>...saved
+    help set{weight=100}: to set some value as an internal variable
+    re (\w+){weight=100}: <re .cap1>
+    ex (\w+){weight=100}: <ex .cap1>
+    help re{weight=100}: internal redirect
+
+  cmds: &cmds
+    <<: *dcmds
+    hello world: ...hello world
+    
+  init: &common
+    <<: *cmds
+    (.+):
+      - ok
+      
+  srtr:
+    設定{weight=100}:
+      設定です()
+    end{weight=100}:
+      終了します。<init>
+    save{weight=100}:
+      セーブしました。15分だけ保存されています。再開するときは、もう一度しりとりをはじめてください。<init>
+    しりとり:
+      <$sctx := srtrctx>
+      <if $sctx.Flag.IsNewGame>
+      「しりとり」ですねっ！！負けませんよ！！
+      (!)初回は 、あなたがどのくらい賢いか腕ためしみせてください！！
+      それじゃ、<rubi $sctx.AnsWord>です！ 「<$sctx.Head $sctx.AnsWord>」からですよ！
+      <else>
+        では、再開しましょう！
+      <end>
+      <set "session_srtr" $sctx>
+    (.+): |
+      <$ws := nlp .session_text>
+      <$sctx := srtrctx>
+      <if $sctx.Flag.IsNewGame>
+      「しりとり」ですねっ！！負けませんよ！！
+      (!)初回は 、あなたがどのくらい賢いか腕ためしみせてください！！
+      それじゃ、<rubi $sctx.AnsWord>です！ 「<$sctx.Head $sctx.AnsWord>」からですよ！
+      <else>
+        <with $n := extpos $ws "名詞">
+          <srtrai $sctx (index $n 0)>
+          <rubi $sctx.ThisWord>ですね！
+          <if eq $sctx.Mode "ErrTooShort">
+            字数が短いです。<$sctx.LenRule>文字以上にしてください。
+          <else if eq $sctx.Mode "NoSound">
+            読めないです... 他の単語でお願いします。
+          <else if eq $sctx.Mode "ErrNotMatch">
+            頭文字が合わないですよ！
+
+          <else if eq $sctx.Mode "ErrHasAlready">
+            その単語は、すでに出てますよ！ 別の単語をください。
+
+          <else if eq $sctx.Mode "RestrictHead">
+            「<$sctx.Head $sctx.ThisWord>」ですから、わたしの勝ちです！
+            <init><del "session_srtr">
+
+          <else if eq $sctx.Mode "AILoseN">
+            よくこんなに続きますね！私の負けです...
+            <init><del "session_srtr">
+
+          <else if eq $sctx.Mode "AILoseNoExist">
+            思いつきませんでした... まけちゃいました...//
+            <init><del "session_srtr">
+
+          <else if eq $sctx.Mode "AILoseRestrictHead">
+              <rubi .>! あっ<$sctx.Head .> がついてしまいました...
+              私の敗北です。<init><del "session_srtr">
+
+          <else if $sctx.Flag.IsLose>
+              思いつきませんでした... まけちゃいました。
+              <init><del "session_srtr">
+          <else>
+            えっと、<rubi $sctx.AnsWord>！次は「<$sctx.Head $sctx.AnsWord>」です！
+          <end>
+        <else>
+          あれ、名詞がみつからないですよ？
+        <end>
+      <end>
+
+knowledge:
+  regex:
+    id: \@?(?P<id>[a-zA-Z0-9_]{4,15})\s?
+
+  expression:
+    event.follow:
+      - thank you for following!
